@@ -1,0 +1,336 @@
+# ENERGRAM 🔋
+
+A sophisticated ESP32-based battery management and security system with PIN authentication, real-time power monitoring, and an intuitive OLED interface.
+
+## 📋 Overview
+
+ENERGRAM is an intelligent power management system designed for 3S40P lithium-ion battery packs (11.1V nominal, 88Ah capacity). It combines robust security features with comprehensive power monitoring, providing users with a secure and informative interface for managing their battery systems.
+
+### Key Features
+
+- **🔐 Secure PIN Authentication**: 4-digit PIN system with configurable lockout mechanism
+- **📊 Real-Time Power Monitoring**: Voltage, current, and power consumption tracking
+- **🔋 Intelligent Battery Management**: Percentage calculation with charge/discharge detection
+- **🎨 Visual Feedback**: Animated OLED display with charging animations
+- **💾 Persistent Security**: EEPROM-based state retention across power cycles
+- **⚡ Relay Control**: Automated load switching based on authentication status
+
+## 🔧 Hardware Requirements
+
+### Components
+
+| Component | Specification | Purpose |
+|-----------|--------------|---------|
+| **Microcontroller** | ESP32 Development Board | Main processing unit |
+| **Display** | SSH1106 128x64 OLED | User interface |
+| **Keypad** | 4x3 Matrix Keypad | PIN entry |
+| **Current Sensor** | Adafruit INA219 | Power monitoring |
+| **Relay Module** | 5V Single Channel | Load switching |
+| **Battery** | 3S40P Li-ion (11.1V, 88Ah) | Power source |
+
+### Pin Configuration
+
+```cpp
+// Relay Control
+GPIO 12  → Relay Module
+
+// Keypad (4x3 Matrix)
+GPIO 19  → Row 1
+GPIO 18  → Row 2
+GPIO 5   → Row 3
+GPIO 17  → Row 4
+GPIO 16  → Column 1
+GPIO 4   → Column 2
+GPIO 0   → Column 3
+
+// I2C (OLED & INA219)
+GPIO 21  → SDA
+GPIO 22  → SCL
+```
+
+## 📦 Required Libraries
+
+Install the following libraries via Arduino Library Manager or PlatformIO:
+
+```cpp
+WiFi.h              // ESP32 built-in
+Keypad.h            // by Mark Stanley & Alexander Brevig
+GyverOLED.h         // by AlexGyver
+Adafruit_INA219.h   // by Adafruit
+EEPROM.h            // ESP32 built-in
+time.h              // Standard library
+```
+
+## 🚀 Installation
+
+### Arduino IDE
+
+1. **Install ESP32 Board Support**
+   - Open Arduino IDE → File → Preferences
+   - Add to Additional Board Manager URLs:
+     ```
+     https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+     ```
+   - Tools → Board → Boards Manager → Search "ESP32" → Install
+
+2. **Install Required Libraries**
+   - Sketch → Include Library → Manage Libraries
+   - Search and install each library listed above
+
+3. **Upload Code**
+   - Connect ESP32 via USB
+   - Select Board: "ESP32 Dev Module"
+   - Select correct COM Port
+   - Click Upload
+
+### PlatformIO
+
+```ini
+[env:esp32dev]
+platform = espressif32
+board = esp32dev
+framework = arduino
+lib_deps = 
+    adafruit/Adafruit INA219@^1.2.0
+    gyverlibs/GyverOLED@^1.5.3
+    chris--a/Keypad@^3.1.1
+monitor_speed = 115200
+```
+
+## 💻 Configuration
+
+### Security Settings
+
+```cpp
+#define CORRECT_PIN "1911"           // Default PIN (4 digits)
+#define MAX_ATTEMPTS 5               // Failed attempts before lockout
+#define LOCKOUT_DURATION 120000      // Lockout time in ms (2 minutes)
+```
+
+### Battery Configuration
+
+```cpp
+#define BATTERY_MIN_VOLTAGE 9.0      // 3.0V per cell minimum
+#define BATTERY_MAX_VOLTAGE 12.6     // 4.2V per cell maximum
+#define BATTERY_NOMINAL_VOLTAGE 11.1 // 3.7V per cell nominal
+```
+
+### Performance Tuning
+
+```cpp
+#define VOLTAGE_SMOOTHING 0.2        // Smoothing factor (0.0-1.0)
+#define POWER_THRESHOLD 0.1          // Minimum power detection (watts)
+#define CHARGING_CURRENT -0.02       // Charging detection threshold (A)
+#define CHARGE_DEBOUNCE 1000         // Charge state change delay (ms)
+```
+
+## 🎯 Usage
+
+### Initial Setup
+
+1. Power on the system
+2. Wait for the welcome screen (3 seconds)
+3. Enter default PIN: **1911**
+4. System unlocks and displays power monitoring screen
+
+### PIN Entry
+
+- **0-9**: Enter digit
+- **#**: Delete last digit (backspace)
+- **Auto-submit**: Automatically verifies after 4 digits
+
+### Home Screen Information
+
+```
+┌─────────────────────────┐
+│ [🔋57%]    Energram     │
+│                         │
+│   Voltage: 11.75V       │
+└─────────────────────────┘
+```
+
+- **Battery Icon**: Visual charge level with animation when charging
+- **Battery Percentage**: Calculated from voltage with Li-ion curve
+- **Voltage Display**: Real-time smoothed voltage reading
+
+### Security Features
+
+#### Failed Attempt Protection
+- Tracks failed PIN attempts in EEPROM
+- After 5 failed attempts, system enters lockout mode
+- Displays remaining attempts after each failure
+
+#### Lockout System
+- 2-minute lockout after max attempts reached
+- Real-time countdown display
+- Persists across power cycles using EEPROM and RTC tracking
+- Automatically resets after lockout period expires
+
+#### State Persistence
+All security data is stored in EEPROM:
+- Failed attempt counter
+- Lockout start timestamp
+- System lock status
+- Real-time reference points
+
+## 🔋 Battery Management
+
+### Charging Detection
+
+The system automatically detects charging states using:
+- Current flow direction (negative = charging)
+- Shunt voltage analysis
+- Configurable thresholds with debouncing
+
+### Charging Animation
+
+When charging is detected, the battery icon displays a dynamic animation:
+- Lightning bolt indicator
+- Animated fill patterns
+- Pulsing effect at high charge levels
+- 300ms frame refresh rate
+
+### Battery Percentage Calculation
+
+Non-linear mapping optimized for Li-ion characteristics:
+```
+9.0V  - 10.5V  → 0%  - 20%  (Critical range - high sensitivity)
+10.5V - 11.7V  → 20% - 80%  (Linear range)
+11.7V - 12.6V  → 80% - 100% (Full range - low sensitivity)
+```
+
+## 🛡️ Security Architecture
+
+### Multi-Layer Protection
+
+1. **Hardware Level**: Relay physically disconnects load
+2. **Software Level**: PIN verification with attempt limiting
+3. **Persistence Level**: EEPROM-based state storage
+4. **Time Level**: Real-time tracking prevents bypass via reset
+
+### EEPROM Memory Map
+
+```
+Address 0-3:   Failed attempts counter (uint8_t)
+Address 4-7:   Lockout start time - millis() (unsigned long)
+Address 8-11:  Lockout active flag (uint8_t)
+Address 12-19: Real timestamp at lockout (unsigned long)
+Address 20-27: Boot timestamp reference (unsigned long)
+```
+
+## 🐛 Troubleshooting
+
+### Display Issues
+
+**Problem**: OLED not responding
+- Check I2C connections (SDA/SCL)
+- Verify OLED address (default: 0x3C)
+- Test with I2C scanner sketch
+
+### Keypad Issues
+
+**Problem**: Keys not registering or double-pressing
+- Adjust `KEY_DEBOUNCE_TIME` (default: 200ms)
+- Check keypad wiring and connections
+- Test individual keys with serial monitor
+
+### Power Monitoring Issues
+
+**Problem**: Incorrect readings from INA219
+- Verify sensor calibration: `ina219.setCalibration_32V_2A()`
+- Check power supply voltage
+- Adjust `VOLTAGE_SMOOTHING` for stability
+
+### Lockout Problems
+
+**Problem**: Lockout not persisting after reset
+- Check EEPROM initialization: `EEPROM.begin(EEPROM_SIZE)`
+- Verify EEPROM.commit() is called after saves
+- Monitor serial output for timestamp tracking
+
+## 📈 Advanced Customization
+
+### Changing the PIN
+
+```cpp
+#define CORRECT_PIN "1911"  // Change to your 4-digit PIN
+```
+
+### Adjusting Lockout Duration
+
+```cpp
+#define LOCKOUT_DURATION 300000  // 5 minutes
+#define LOCKOUT_DURATION 600000  // 10 minutes
+```
+
+### Display Refresh Rates
+
+```cpp
+#define CHARGING_ANIM_SPEED 300  // Animation frame rate (ms)
+lastPowerUpdate > 500            // Power data update rate (ms)
+delay(50)                        // Main loop delay (ms)
+```
+
+## 🔬 System States
+
+### State Machine Overview
+
+```
+┌─────────────┐
+│   STARTUP   │
+└──────┬──────┘
+       │
+       ├──┬──► LOCKED ──────┬──► (Wait for timeout)
+       │  │                  │
+       │  └──────────────────┘
+       │
+       ├──► PIN ENTRY ──┬──► AUTHENTICATED ──► HOME SCREEN
+       │                │
+       └────────────────┘
+```
+
+## 📊 Performance Specifications
+
+- **Power Consumption**: ~150mA (ESP32 + OLED + sensors)
+- **Update Rate**: 2Hz (500ms power monitoring cycle)
+- **Display Refresh**: Variable (on-demand updates)
+- **Keypad Debounce**: 50ms hardware + 200ms software
+- **EEPROM Writes**: Minimized (only on state changes)
+- **Boot Time**: ~3 seconds (including welcome screen)
+
+## 🤝 Contributing
+
+Contributions are welcome! Areas for improvement:
+
+- WiFi integration for remote monitoring
+- Real NTP time synchronization
+- Mobile app integration
+- Additional authentication methods (RFID, biometric)
+- Cloud logging and analytics
+- Multi-user PIN support
+
+## 📄 License
+
+This project is open-source. Please check the repository for license details.
+
+## ⚠️ Safety Warnings
+
+- **High Voltage**: 3S Li-ion packs can deliver dangerous current
+- **Proper Fusing**: Always use appropriate fuses and protection
+- **Ventilation**: Ensure adequate cooling for all components
+- **Monitoring**: Never leave charging batteries unattended
+- **Qualification**: Ensure you're qualified to work with battery systems
+
+## 🔗 Resources
+
+- [ESP32 Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
+- [INA219 Datasheet](https://www.ti.com/lit/ds/symlink/ina219.pdf)
+- [Li-ion Battery Guide](https://batteryuniversity.com/article/bu-204-how-do-lithium-batteries-work)
+
+## 📧 Support
+
+For issues, questions, or suggestions, please open an issue on the project repository.
+
+---
+
+**Built with ❤️ for Students and Small Business Owners Crippled By Energy Poverty In Nigeria**
