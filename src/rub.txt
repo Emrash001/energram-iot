@@ -1,0 +1,251 @@
+#include <WiFi.h>
+#include <Keypad.h>
+#include <GyverOLED.h>
+#include <Adafruit_INA219.h>
+
+
+Adafruit_INA219 ina219;
+#define relay 12
+GyverOLED<SSH1106_128x64> oled;
+// // 🔹 Replace these with your Firebase credentials
+// #define FIREBASE_HOST "https://energram-iot-default-rtdb.firebaseio.com/"
+// #define FIREBASE_API_KEY "AIzaSyBNScW3NlI35A5uxCgIBF1X1c7KAyeCU98"
+#define A1 36
+// 🔹 WiFi Credentials
+// #define WIFI_SSID "Infinix HOT 20i"
+// #define WIFI_PASSWORD "mrash@124"
+
+// 🔹 Define Password Length
+#define PASSWORD_LENGTH 5  // 4 chars + NULL terminator
+
+// 🔹 LCD Setup (Check I2C address with an I2C scanner if needed)
+
+
+// 🔹 User Input Variables
+char Data[PASSWORD_LENGTH];  
+char UserPassword[PASSWORD_LENGTH];  
+byte data_count = 0;
+char customKey;
+char inputKey;
+
+
+bool chargingSystemEnabled = false;
+
+// 🔹 Keypad Configuration
+const byte ROWS = 4, COLS = 3;
+char keys[ROWS][COLS] = {
+    {'1', '2', '3'},
+    {'4', '5', '6'},
+    {'7', '8', '9'},
+    {'*', '0', '#'}
+};
+byte rowPins[ROWS] = {19, 18, 5, 17};
+byte colPins[COLS] = {16, 4, 0};
+
+Keypad customKeypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+// // 🔹 Firebase Configuration
+// FirebaseData fbdo;
+// FirebaseAuth auth;
+// FirebaseConfig config;
+char userInput[] = "----";
+char realPin[] = "1911";
+uint8_t passCount = 0;
+
+
+void getPower(){
+    float shuntvoltage = 0;
+  float busvoltage = 0;
+  float current_mA = 0;
+  float loadvoltage = 0;
+  float power_mW = 0;
+
+  shuntvoltage = ina219.getShuntVoltage_mV();
+  busvoltage = ina219.getBusVoltage_V();
+  current_mA = ina219.getCurrent_mA();
+  power_mW = ina219.getPower_mW();
+  loadvoltage = busvoltage + (shuntvoltage / 1000);
+  
+  Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
+  Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");
+  Serial.print("Load Voltage:  "); Serial.print(loadvoltage); Serial.println(" V");
+  Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA");
+  Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
+  Serial.println("");
+
+  delay(2000);
+}
+
+void menu(){
+    while (true){
+        oled.clear();
+        oled.setCursorXY(5, 26);
+        oled.print("Battery: ");
+        oled.setCursorXY(55, 26);
+        oled.print("90%");
+        oled.update();
+}
+    
+}
+
+void clearData() {
+    memset(Data, 0, PASSWORD_LENGTH);
+    data_count = 0;
+}
+
+
+
+void resetLCD() {
+    // lcd.clear();
+    // lcd.setCursor(0, 0);
+    // lcd.print("Welcome");
+    // lcd.setCursor(0, 1);
+    // lcd.print("Enter Password");
+}
+
+
+char getKey(){
+    char key = customKeypad.getKey();
+    if (key){
+        //Serial.println(key);
+        inputKey = key;
+        Serial.println(key);
+        return key;
+    }
+    else {
+        return 'j';
+    }
+}
+
+
+void grantAccess(){
+    oled.clear();
+    oled.setCursorXY(5, 26);
+    oled.print("Access Granted!!!");
+    oled.update();
+    digitalWrite(relay, HIGH);
+    delay(2000);
+    menu();
+
+
+}
+
+
+void deny(){
+    oled.clear();
+    oled.setCursorXY(5, 26);
+    oled.print("Incorrect Pin");
+    oled.update();
+    digitalWrite(relay, LOW);
+    delay(3000);
+    
+}
+
+
+
+void handleKeypadInput() {
+    //Serial.println(customKey);
+    char receivedKey = getKey();
+    //Serial.println(receivedKey);
+    //return;
+
+
+    
+    if ((receivedKey != 'j') && (passCount <=4)){
+        Serial.println(receivedKey);
+        
+        oled.clear();
+        oled.update();
+        oled.setCursorXY(20,26);
+        oled.println("PIN: ");
+        oled.update();
+        Serial.print("Key: ");
+        Serial.println(receivedKey);
+        userInput[passCount] = receivedKey;
+        Serial.println(userInput);
+        oled.setCursorXY(50,26);
+        oled.print(userInput);
+        oled.update();
+        passCount++;
+
+
+    }
+
+
+    if (passCount == 4){
+        if (String(realPin) == String(userInput)){
+            //Serial.println("correct passkey");
+            grantAccess();
+        }
+        else{
+            deny();
+            //Serial.println("incorrect key");
+            //Serial.print("Real: ");
+            // Serial.println(realPin);
+            // Serial.print("UserInput: ");
+            // Serial.println(userInput);
+        }
+        return;
+    }
+    return;
+
+  
+}
+
+
+
+void welcome(){
+    
+}
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println("System Ready");
+    pinMode(relay, OUTPUT);
+    digitalWrite(relay, LOW);
+    Serial.println("check point 2");
+    oled.init();  
+    Serial.println("passed oled.init()");
+    oled.clear();   
+    oled.update(); 
+    oled.rect(0,0,127,63,OLED_STROKE);
+    oled.setCursorXY(10, 26);
+    oled.print("Welcome to ENERGRAM");
+    oled.update();
+    Serial.println("check point 3");
+    delay(3000);
+    oled.clear();
+
+    oled.setCursorXY(5, 26);
+    oled.print("Please enter your pin!");
+    oled.rect(0,0,127,63,OLED_STROKE);
+    
+    oled.update();
+    Serial.println("Check point one");
+
+    //Configure INA219
+    
+  Serial.println("Device is ready now");
+
+}
+
+
+
+void loop() {
+handleKeypadInput();
+    delay(50);
+}
+
+
+
+// #include <Arduino.h>
+
+// void setup(){
+//     Serial.begin(115200);
+//     Serial.println("ready");
+// }
+
+// void loop(){
+//     Serial.println("Running");
+//     delay(1000);
+// }
